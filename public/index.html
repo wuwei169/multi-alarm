@@ -234,19 +234,37 @@
     if (audioCtx.state === 'suspended') audioCtx.resume();
   }
 
+  function playTone(freq, startTime, duration) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, startTime);
+    gain.gain.setValueAtTime(0, startTime);
+    gain.gain.linearRampToValueAtTime(0.5, startTime + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+    osc.start(startTime);
+    osc.stop(startTime + duration);
+  }
+
   function beep() {
     if (!audioCtx) return;
     try {
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
-      gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2);
-      osc.start(audioCtx.currentTime);
-      osc.stop(audioCtx.currentTime + 2);
+      // dee-dum … dee-dum (Apple Watch-style two-note chirp, repeated twice)
+      const t = audioCtx.currentTime;
+      const dee = 1047; // C6
+      const dum = 1319; // E6
+      const noteLen = 0.12;
+      const gap = 0.07;
+      const pause = 0.55;
+
+      // First dee-dum
+      playTone(dee, t, noteLen);
+      playTone(dum, t + noteLen + gap, noteLen);
+      // Second dee-dum
+      playTone(dee, t + noteLen + gap + noteLen + pause, noteLen);
+      playTone(dum, t + noteLen + gap + noteLen + pause + noteLen + gap, noteLen);
     } catch (e) {}
   }
 
