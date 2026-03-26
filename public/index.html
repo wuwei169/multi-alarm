@@ -202,10 +202,12 @@
   const isMobile = isIOS || /Android/.test(navigator.userAgent);
 
   if (!isStandalone) {
-    if (isMobile) {
-      installBanner.textContent = 'For background alarms, add to your Home Screen: Browser → Share → Add to Home Screen';
+    if (isIOS) {
+      installBanner.textContent = 'For alarms to work when your phone is locked, add this to your Home Screen: tap Share → Add to Home Screen.';
+    } else if (isMobile) {
+      installBanner.textContent = 'For alarms to work when your phone is locked, add this to your Home Screen: tap the browser menu (⋮) → Add to Home Screen.';
     } else {
-      installBanner.textContent = 'Allow notifications when your browser asks, so alarms work even when this tab is in the background.';
+      installBanner.textContent = 'Allow notifications when your browser asks, so alarms work in the background.';
     }
     installBanner.style.display = 'block';
   }
