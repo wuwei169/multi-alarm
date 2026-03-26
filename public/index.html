@@ -202,10 +202,8 @@
   const isMobile = isIOS || /Android/.test(navigator.userAgent);
 
   if (!isStandalone) {
-    if (isIOS) {
-      installBanner.textContent = 'For alarms to work when your phone is locked, add this to your Home Screen: tap Share → Add to Home Screen.';
-    } else if (isMobile) {
-      installBanner.textContent = 'For alarms to work when your phone is locked, add this to your Home Screen: tap the browser menu (⋮) → Add to Home Screen.';
+    if (isMobile) {
+      installBanner.textContent = 'For alarms to work when your phone is locked: Share → Add to Home Screen.';
     } else {
       installBanner.textContent = 'Allow notifications when your browser asks, so alarms work in the background.';
     }
