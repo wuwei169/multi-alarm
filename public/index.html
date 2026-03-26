@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Multi Alarm" />
+  <title>Multi Alarm</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100dvh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #c8ede0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .card {
+      width: 100%;
+      max-width: 320px;
+      min-height: 420px;
+      padding: 2rem 1.5rem;
+      display: flex;
+      flex-direction: column;
+      background: #E1F5EE;
+      border-radius: 20px;
+      margin: 1rem;
+    }
+
+    .header { margin-bottom: 2rem; text-align: center; }
+
+    .title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #0F6E56;
+    }
+
+    .install-banner {
+      background: #fffbe6;
+      border: 1px solid #ffe066;
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 1.5rem;
+      font-size: 14px;
+      color: #7a6000;
+      text-align: center;
+      line-height: 1.5;
+      display: none;
+    }
+
+    .input-group { margin-bottom: 3rem; }
+
+    .input-label {
+      display: block;
+      font-size: 15px;
+      color: #0F6E56;
+      margin-bottom: 8px;
+    }
+
+    #intervals-input {
+      width: 100%;
+      font-size: 18px;
+      padding: 12px 14px;
+      border: 0.5px solid #5DCAA5;
+      border-radius: 10px;
+      background: #f0faf6;
+      color: #085041;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    #intervals-input:focus { border-color: #0F6E56; }
+    #intervals-input:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .saved-label {
+      font-size: 14px;
+      color: #1D9E75;
+      margin-top: 6px;
+      min-height: 16px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .saved-label.visible { opacity: 1; }
+
+    .countdown {
+      text-align: center;
+      margin-bottom: 12px;
+      display: none;
+    }
+
+    .countdown.visible { display: block; }
+
+    .countdown-label {
+      font-size: 15px;
+      color: #0F6E56;
+      margin-bottom: 2px;
+    }
+
+    .countdown-timer {
+      font-size: 48px;
+      font-weight: 500;
+      color: #085041;
+      letter-spacing: -1px;
+      line-height: 1;
+    }
+
+    .spacer { flex: 1; }
+
+    #main-btn {
+      width: 100%;
+      padding: 20px;
+      font-size: 20px;
+      font-weight: 500;
+      border: none;
+      border-radius: 16px;
+      background: #0F6E56;
+      color: #E1F5EE;
+      cursor: pointer;
+      transition: background 0.15s, transform 0.1s;
+    }
+
+    #main-btn:active { transform: scale(0.98); }
+    #main-btn.stop { background: #085041; }
+
+    @keyframes flash {
+      0%   { opacity: 1; }
+      100% { opacity: 0; }
+    }
+
+    .flash-overlay {
+      position: fixed;
+      inset: 0;
+      background: white;
+      pointer-events: none;
+      opacity: 0;
+      z-index: 999;
+    }
+
+    .flash-overlay.flashing {
+      animation: flash 0.5s ease-out forwards;
+    }
+  </style>
+</head>
+<body>
+
+<div class="flash-overlay" id="flash-overlay"></div>
+
+<div class="card">
+  <div class="header">
+    <p class="title">Multi Alarm</p>
+  </div>
+
+  <div class="install-banner" id="install-banner">
+    To receive alarms in the background, add this to your Home Screen: Safari → Share → Add to Home Screen
+  </div>
+
+  <div class="input-group">
+    <label class="input-label" for="intervals-input">Intervals (minutes)</label>
+    <input type="text" id="intervals-input" placeholder="10, 20, 30" />
+    <p class="saved-label" id="saved-label">Saved</p>
+  </div>
+
+  <div class="countdown" id="countdown">
+    <p class="countdown-label" id="countdown-label">Next alarm in</p>
+    <p class="countdown-timer" id="countdown-timer">--:--</p>
+  </div>
+
+  <div class="spacer"></div>
+
+  <button id="main-btn">Start</button>
+</div>
+
+<script>
+  const STORAGE_KEY = 'multi-alarm-intervals';
+  const DEFAULT_INTERVALS = '10, 20, 30';
+  const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+
+  const input = document.getElementById('intervals-input');
+  const savedLabel = document.getElementById('saved-label');
+  const countdown = document.getElementById('countdown');
+  const countdownLabel = document.getElementById('countdown-label');
+  const countdownTimer = document.getElementById('countdown-timer');
+  const mainBtn = document.getElementById('main-btn');
+  const flashOverlay = document.getElementById('flash-overlay');
+  const installBanner = document.getElementById('install-banner');
+
+  let running = false;
+  let localTimeouts = [];
+  let tickInterval = null;
+  let alarmTimes = [];
+  let nextAlarmIndex = 0;
+  let saveDebounce = null;
+  let audioCtx = null;
+
+  // Show install banner if not running as installed PWA
+  const isStandalone = navigator.standalone === true ||
+    window.matchMedia('(display-mode: standalone)').matches;
+  if (!isStandalone) installBanner.style.display = 'block';
+
+  // Init input
+  input.value = localStorage.getItem(STORAGE_KEY) ?? DEFAULT_INTERVALS;
+
+  // Register service worker
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/sw.js').catch(e => console.warn('SW failed', e));
+  }
+
+  // Auto-save
+  input.addEventListener('input', () => {
+    clearTimeout(saveDebounce);
+    savedLabel.classList.remove('visible');
+    saveDebounce = setTimeout(() => {
+      localStorage.setItem(STORAGE_KEY, input.value);
+      savedLabel.classList.add('visible');
+      setTimeout(() => savedLabel.classList.remove('visible'), 2000);
+    }, 1000);
+  });
+
+  function parseIntervals(raw) {
+    return raw.split(',')
+      .map(s => parseInt(s.trim(), 10))
+      .filter(n => Number.isFinite(n) && n > 0)
+      .sort((a, b) => a - b);
+  }
+
+  // Audio (foreground)
+  function initAudio() {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  }
+
+  function beep() {
+    if (!audioCtx) return;
+    try {
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+      gain.gain.setValueAtTime(0.6, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 2);
+      osc.start(audioCtx.currentTime);
+      osc.stop(audioCtx.currentTime + 2);
+    } catch (e) {}
+  }
+
+  function flash() {
+    flashOverlay.classList.remove('flashing');
+    void flashOverlay.offsetWidth;
+    flashOverlay.classList.add('flashing');
+  }
+
+  // Push subscription helpers
+  function urlBase64ToUint8Array(base64) {
+    const padding = '='.repeat((4 - base64.length % 4) % 4);
+    const b64 = (base64 + padding).replace(/-/g, '+').replace(/_/g, '/');
+    const raw = atob(b64);
+    return Uint8Array.from(raw, c => c.charCodeAt(0));
+  }
+
+  async function subscribeToPush() {
+    if (!('PushManager' in window)) return null;
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') return null;
+    const reg = await navigator.serviceWorker.ready;
+    const { key } = await fetch('/api/vapid-public-key').then(r => r.json());
+    return reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(key),
+    });
+  }
+
+  async function scheduleOnServer(subscription, times) {
+    await fetch('/api/schedule', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: SESSION_ID, subscription, alarmTimes: times }),
+    });
+  }
+
+  async function cancelOnServer() {
+    await fetch('/api/cancel', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: SESSION_ID }),
+    });
+  }
+
+  // Countdown
+  function tick() {
+    if (nextAlarmIndex >= alarmTimes.length) return;
+    const remaining = alarmTimes[nextAlarmIndex] - Date.now();
+    if (remaining <= 0) {
+      countdownTimer.textContent = '00:00';
+    } else {
+      const totalSec = Math.ceil(remaining / 1000);
+      const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+      const ss = String(totalSec % 60).padStart(2, '0');
+      countdownTimer.textContent = `${mm}:${ss}`;
+    }
+  }
+
+  function onLocalAlarm(index) {
+    beep();
+    flash();
+    nextAlarmIndex = index + 1;
+    if (nextAlarmIndex >= alarmTimes.length) {
+      clearInterval(tickInterval);
+      countdownLabel.textContent = '';
+      countdownTimer.textContent = 'Done';
+      setTimeout(reset, 2500);
+    } else {
+      tick();
+    }
+  }
+
+  async function start() {
+    const intervals = parseIntervals(input.value);
+    if (intervals.length === 0) { input.focus(); return; }
+
+    initAudio();
+    running = true;
+    input.disabled = true;
+    mainBtn.textContent = 'Stop';
+    mainBtn.classList.add('stop');
+    countdown.classList.add('visible');
+    countdownLabel.textContent = 'Next alarm in';
+
+    const now = Date.now();
+    alarmTimes = intervals.map(m => now + m * 60 * 1000);
+    nextAlarmIndex = 0;
+
+    // Local timeouts (works in foreground)
+    localTimeouts = intervals.map((m, i) =>
+      setTimeout(() => onLocalAlarm(i), m * 60 * 1000)
+    );
+
+    tick();
+    tickInterval = setInterval(tick, 500);
+
+    // Server-side push (works in background)
+    try {
+      const subscription = await subscribeToPush();
+      if (subscription) await scheduleOnServer(subscription, alarmTimes);
+    } catch (e) {
+      console.warn('Push setup failed:', e);
+    }
+  }
+
+  function reset() {
+    running = false;
+    input.disabled = false;
+    mainBtn.textContent = 'Start';
+    mainBtn.classList.remove('stop');
+    countdown.classList.remove('visible');
+    countdownTimer.textContent = '--:--';
+    countdownLabel.textContent = 'Next alarm in';
+  }
+
+  async function stop() {
+    localTimeouts.forEach(clearTimeout);
+    localTimeouts = [];
+    clearInterval(tickInterval);
+    tickInterval = null;
+    alarmTimes = [];
+    nextAlarmIndex = 0;
+    reset();
+    try { await cancelOnServer(); } catch (e) {}
+  }
+
+  mainBtn.addEventListener('click', () => running ? stop() : start());
+</script>
+</body>
+</html>
