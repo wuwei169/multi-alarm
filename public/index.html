@@ -155,9 +155,7 @@
     <p class="title">Multi Alarm</p>
   </div>
 
-  <div class="install-banner" id="install-banner">
-    To receive alarms in the background, add this to your Home Screen: Safari → Share → Add to Home Screen
-  </div>
+  <div class="install-banner" id="install-banner"></div>
 
   <div class="input-group">
     <label class="input-label" for="intervals-input">Intervals (minutes)</label>
@@ -200,7 +198,17 @@
   // Show install banner if not running as installed PWA
   const isStandalone = navigator.standalone === true ||
     window.matchMedia('(display-mode: standalone)').matches;
-  if (!isStandalone) installBanner.style.display = 'block';
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isMobile = isIOS || /Android/.test(navigator.userAgent);
+
+  if (!isStandalone) {
+    if (isMobile) {
+      installBanner.textContent = 'For background alarms, add to your Home Screen: Browser → Share → Add to Home Screen';
+    } else {
+      installBanner.textContent = 'Allow notifications when your browser asks, so alarms work even when this tab is in the background.';
+    }
+    installBanner.style.display = 'block';
+  }
 
   // Init input
   input.value = localStorage.getItem(STORAGE_KEY) ?? DEFAULT_INTERVALS;
