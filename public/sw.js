@@ -1,7 +1,7 @@
 self.addEventListener('push', event => {
   const data = event.data
     ? event.data.json()
-    : { title: 'Multi Alarm', body: "Time's up! ⏰" };
+    : { title: "Time's up!", body: '' };
 
   event.waitUntil(
     self.registration.showNotification(data.title, {

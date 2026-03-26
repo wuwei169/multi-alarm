@@ -30,7 +30,7 @@ async function fireAlarm(sessionId) {
   try {
     await webpush.sendNotification(
       session.subscription,
-      JSON.stringify({ title: 'Multi Alarm', body: "Time's up! ⏰" })
+      JSON.stringify({ title: "Time's up!", body: '' })
     );
   } catch (err) {
     console.error('Push error:', err.statusCode, err.body);
