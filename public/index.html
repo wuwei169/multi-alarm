@@ -302,11 +302,11 @@
     });
   }
 
-  async function scheduleOnServer(subscription, times) {
+  async function scheduleOnServer(subscription, alarms) {
     await fetch('/api/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: SESSION_ID, subscription, alarmTimes: times }),
+      body: JSON.stringify({ sessionId: SESSION_ID, subscription, alarms }),
     });
   }
 
@@ -373,7 +373,7 @@
     // Server-side push (works in background)
     try {
       const subscription = await subscribeToPush();
-      if (subscription) await scheduleOnServer(subscription, alarmTimes);
+      if (subscription) await scheduleOnServer(subscription, intervals.map((m, i) => ({ time: alarmTimes[i], minutes: m })));
     } catch (e) {
       console.warn('Push setup failed:', e);
     }

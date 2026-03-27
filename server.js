@@ -23,19 +23,18 @@ webpush.setVapidDetails(
 // In-memory store: sessionId -> { subscription, timeouts[] }
 const sessions = new Map();
 
-async function fireAlarm(sessionId) {
+async function fireAlarm(sessionId, minutes) {
   const session = sessions.get(sessionId);
   if (!session) return;
 
   try {
     await webpush.sendNotification(
       session.subscription,
-      JSON.stringify({ title: "Time's up!", body: '' })
+      JSON.stringify({ title: `${minutes} mins up`, body: '' })
     );
   } catch (err) {
     console.error('Push error:', err.statusCode, err.body);
     if (err.statusCode === 410 || err.statusCode === 404) {
-      // Subscription gone — clean up
       session.timeouts.forEach(clearTimeout);
       sessions.delete(sessionId);
     }
@@ -47,16 +46,15 @@ app.get('/api/vapid-public-key', (req, res) => {
 });
 
 app.post('/api/schedule', (req, res) => {
-  const { sessionId, subscription, alarmTimes } = req.body;
+  const { sessionId, subscription, alarms } = req.body;
 
-  // Cancel any existing session for this id
   const existing = sessions.get(sessionId);
   if (existing) existing.timeouts.forEach(clearTimeout);
 
   const now = Date.now();
-  const timeouts = alarmTimes.map(time => {
+  const timeouts = alarms.map(({ time, minutes }) => {
     const delay = Math.max(0, time - now);
-    return setTimeout(() => fireAlarm(sessionId), delay);
+    return setTimeout(() => fireAlarm(sessionId, minutes), delay);
   });
 
   sessions.set(sessionId, { subscription, timeouts });
