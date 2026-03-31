@@ -359,20 +359,6 @@
     }
   }
 
-  // Auto-reset if all alarms passed while app was in background
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible' && running) {
-      const now = Date.now();
-      if (alarmTimes.length > 0 && alarmTimes[alarmTimes.length - 1] < now) {
-        localTimeouts.forEach(clearTimeout);
-        localTimeouts = [];
-        clearInterval(tickInterval);
-        tickInterval = null;
-        reset();
-        cancelOnServer().catch(() => {});
-      }
-    }
-  });
 
   async function start() {
     const intervals = parseIntervals(input.value);
