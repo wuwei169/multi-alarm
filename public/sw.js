@@ -1,3 +1,6 @@
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', event => event.waitUntil(clients.claim()));
+
 self.addEventListener('push', event => {
   const data = event.data
     ? event.data.json()
@@ -14,14 +17,5 @@ self.addEventListener('push', event => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(clientList => {
-      for (const client of clientList) {
-        if (client.url.startsWith(self.location.origin)) {
-          return client.focus();
-        }
-      }
-      return clients.openWindow('/');
-    })
-  );
+  event.waitUntil(clients.openWindow('/'));
 });
