@@ -191,6 +191,7 @@
   let localTimeouts = [];
   let tickInterval = null;
   let alarmTimes = [];
+  let alarmMinutes = [];
   let nextAlarmIndex = 0;
   let saveDebounce = null;
   let audioCtx = null;
@@ -319,6 +320,12 @@
   }
 
   // Countdown
+  function updateLabel() {
+    if (nextAlarmIndex < alarmMinutes.length) {
+      countdownLabel.textContent = `${alarmMinutes[nextAlarmIndex]} min alarm in`;
+    }
+  }
+
   function tick() {
     if (nextAlarmIndex >= alarmTimes.length) return;
     const remaining = alarmTimes[nextAlarmIndex] - Date.now();
@@ -342,9 +349,25 @@
       countdownTimer.textContent = 'Done';
       setTimeout(reset, 2500);
     } else {
+      updateLabel();
       tick();
     }
   }
+
+  // Auto-reset if all alarms passed while app was in background
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && running) {
+      const now = Date.now();
+      if (alarmTimes.length > 0 && alarmTimes[alarmTimes.length - 1] < now) {
+        localTimeouts.forEach(clearTimeout);
+        localTimeouts = [];
+        clearInterval(tickInterval);
+        tickInterval = null;
+        reset();
+        cancelOnServer().catch(() => {});
+      }
+    }
+  });
 
   async function start() {
     const intervals = parseIntervals(input.value);
@@ -356,10 +379,10 @@
     mainBtn.textContent = 'Stop';
     mainBtn.classList.add('stop');
     countdown.classList.add('visible');
-    countdownLabel.textContent = 'Next alarm in';
 
     const now = Date.now();
     alarmTimes = intervals.map(m => now + m * 60 * 1000);
+    alarmMinutes = intervals;
     nextAlarmIndex = 0;
 
     // Local timeouts (works in foreground)
@@ -367,6 +390,7 @@
       setTimeout(() => onLocalAlarm(i), m * 60 * 1000)
     );
 
+    updateLabel();
     tick();
     tickInterval = setInterval(tick, 500);
 
