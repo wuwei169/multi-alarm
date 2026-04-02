@@ -345,6 +345,7 @@
   }
 
   function onLocalAlarm(index) {
+    if (!running) return; // already reset by visibilitychange handler
     beep();
     flash();
     nextAlarmIndex = index + 1;
@@ -359,6 +360,25 @@
     }
   }
 
+  // When returning to app, fix stuck UI if alarms fired while in background
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && running) {
+      const now = Date.now();
+      if (alarmTimes.length > 0 && alarmTimes[alarmTimes.length - 1] <= now) {
+        // All alarms done — reset immediately
+        clearInterval(tickInterval);
+        tickInterval = null;
+        reset(); // sets running = false, so any overdue onLocalAlarm calls will no-op
+      } else {
+        // Some alarms still pending — advance past any that fired while backgrounded
+        while (nextAlarmIndex < alarmTimes.length && alarmTimes[nextAlarmIndex] <= now) {
+          nextAlarmIndex++;
+        }
+        updateLabel();
+        tick();
+      }
+    }
+  });
 
   async function start() {
     const intervals = parseIntervals(input.value);
