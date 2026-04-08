@@ -180,8 +180,9 @@
 
 <script>
   const STORAGE_KEY = 'multi-alarm-intervals';
+  const STATE_KEY = 'multi-alarm-state';
   const DEFAULT_INTERVALS = '10, 20, 30';
-  const SESSION_ID = Math.random().toString(36).slice(2) + Date.now().toString(36);
+  let sessionId = Math.random().toString(36).slice(2) + Date.now().toString(36);
 
   const input = document.getElementById('intervals-input');
   const savedLabel = document.getElementById('saved-label');
@@ -312,7 +313,7 @@
     await fetch('/api/schedule', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: SESSION_ID, subscription, alarms }),
+      body: JSON.stringify({ sessionId: sessionId, subscription, alarms }),
     });
   }
 
@@ -320,7 +321,7 @@
     await fetch('/api/cancel', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: SESSION_ID }),
+      body: JSON.stringify({ sessionId: sessionId }),
     });
   }
 
@@ -405,6 +406,9 @@
     tick();
     tickInterval = setInterval(tick, 500);
 
+    // Persist state so iOS page reloads can restore the countdown
+    localStorage.setItem(STATE_KEY, JSON.stringify({ sessionId, alarmTimes, alarmMinutes }));
+
     // Server-side push (works in background)
     try {
       const subscription = await subscribeToPush();
@@ -422,6 +426,7 @@
     countdown.classList.remove('visible');
     countdownTimer.textContent = '--:--';
     countdownLabel.textContent = 'Next alarm in';
+    localStorage.removeItem(STATE_KEY);
   }
 
   async function stop() {
@@ -434,6 +439,42 @@
     reset();
     try { await cancelOnServer(); } catch (e) {}
   }
+
+  // Restore state if iOS reloaded the page while alarms were running
+  (function restoreState() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(STATE_KEY));
+      if (!saved) return;
+      const now = Date.now();
+      if (!saved.alarmTimes || saved.alarmTimes[saved.alarmTimes.length - 1] <= now) {
+        localStorage.removeItem(STATE_KEY);
+        return;
+      }
+      sessionId = saved.sessionId;
+      alarmTimes = saved.alarmTimes;
+      alarmMinutes = saved.alarmMinutes;
+      nextAlarmIndex = 0;
+      while (nextAlarmIndex < alarmTimes.length && alarmTimes[nextAlarmIndex] <= now) {
+        nextAlarmIndex++;
+      }
+      running = true;
+      input.disabled = true;
+      mainBtn.textContent = 'Stop';
+      mainBtn.classList.add('stop');
+      countdown.classList.add('visible');
+      updateLabel();
+      tick();
+      tickInterval = setInterval(tick, 500);
+      // Re-schedule local timeouts for remaining alarms
+      alarmTimes.forEach((time, i) => {
+        if (time > now) {
+          localTimeouts.push(setTimeout(() => onLocalAlarm(i), time - now));
+        }
+      });
+    } catch (e) {
+      localStorage.removeItem(STATE_KEY);
+    }
+  })();
 
   mainBtn.addEventListener('click', () => running ? stop() : start());
 </script>
