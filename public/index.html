@@ -454,7 +454,7 @@
       alarmTimes = saved.alarmTimes;
       alarmMinutes = saved.alarmMinutes;
       nextAlarmIndex = 0;
-      while (nextAlarmIndex < alarmTimes.length && alarmTimes[nextAlarmIndex] <= now) {
+      while (nextAlarmIndex < alarmTimes.length && alarmTimes[nextAlarmIndex] < now - 5000) {
         nextAlarmIndex++;
       }
       running = true;
@@ -465,12 +465,11 @@
       updateLabel();
       tick();
       tickInterval = setInterval(tick, 500);
-      // Re-schedule local timeouts for remaining alarms
-      alarmTimes.forEach((time, i) => {
-        if (time > now) {
-          localTimeouts.push(setTimeout(() => onLocalAlarm(i), time - now));
-        }
-      });
+      // Re-schedule remaining alarms; recently-passed ones fire immediately (delay=0)
+      for (let i = nextAlarmIndex; i < alarmTimes.length; i++) {
+        const delay = Math.max(0, alarmTimes[i] - now);
+        localTimeouts.push(setTimeout(() => onLocalAlarm(i), delay));
+      }
     } catch (e) {
       localStorage.removeItem(STATE_KEY);
     }
