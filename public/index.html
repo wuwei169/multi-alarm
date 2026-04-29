@@ -346,7 +346,7 @@
   }
 
   function onLocalAlarm(index) {
-    if (!running) return; // already reset by visibilitychange handler
+    if (!running || index !== nextAlarmIndex) return;
     beep();
     flash();
     nextAlarmIndex = index + 1;
